@@ -10,8 +10,28 @@ use vulkano::buffer::{CpuAccessibleBuffer, BufferUsage};
 use vulkano::command_buffer::{AutoCommandBufferBuilder, CommandBuffer};
 use vulkano::sync::GpuFuture;
 use image::{ImageBuffer, Rgba};
+use std::env;
+use std::str::FromStr;
+
+fn parse_numeric_argument<T: FromStr>(num: &str) -> T {
+    match num.parse::<T>() {
+        Ok(num) => num,
+        Err(_) => panic!("Could not parse number argument: {}", num)
+    }
+}
 
 fn main() {
+    let args: Vec<String> = env::args().collect();
+    // Get dimension
+    let x_dimension: u32 = match args.get(1) {
+        None => panic!("X dimension is required."),
+        Some(x_dimension) => parse_numeric_argument(&x_dimension)
+    };
+    let y_dimension: u32 = match args.get(2) {
+        None => panic!("Y dimension is required."),
+        Some(y_dimension) => parse_numeric_argument(&y_dimension)
+    };
+
     let instance = Instance::new(None, &InstanceExtensions::none(), None)
         .expect("failed to create instance");
     let physical = PhysicalDevice::enumerate(&instance).next().expect("no device available");
@@ -36,7 +56,7 @@ fn main() {
     );
 
     // Create an image
-    let image = StorageImage::new(device.clone(), Dimensions::Dim2d { width: 1024, height: 1024 },
+    let image = StorageImage::new(device.clone(), Dimensions::Dim2d { width: x_dimension, height: y_dimension },
                                   Format::R8G8B8A8Unorm, Some(queue.family())).unwrap();
 
     let layout = compute_pipeline.layout().descriptor_set_layout(0).unwrap();
@@ -50,12 +70,12 @@ fn main() {
         device.clone(),
         BufferUsage::all(),
         false,
-        (0..1024 * 1024 * 4).map(|_| 0u8)
+        (0..x_dimension * y_dimension * 4).map(|_| 0u8)
     ).expect("failed to create buffer");
 
     // Create command buffer with a draw command dispatch followed by a copy image to buffer command
     let mut builder = AutoCommandBufferBuilder::new(device.clone(), queue.family()).unwrap();
-    builder.dispatch([1024 / 8, 1024 / 8, 1], compute_pipeline.clone(), set.clone(), ()).unwrap()
+    builder.dispatch([x_dimension / 8, y_dimension / 8, 1], compute_pipeline.clone(), set.clone(), ()).unwrap()
         .copy_image_to_buffer(image.clone(), buf.clone()).unwrap();
     let command_buffer = builder.build().unwrap();
 
@@ -64,7 +84,7 @@ fn main() {
     finished.then_signal_fence_and_flush().unwrap().wait(None).unwrap();
 
     let buffer_content = buf.read().unwrap();
-    let image = ImageBuffer::<Rgba<u8>, _>::from_raw(1024, 1024, &buffer_content[..]).unwrap();
+    let image = ImageBuffer::<Rgba<u8>, _>::from_raw(x_dimension, y_dimension, &buffer_content[..]).unwrap();
     image.save("image.png").unwrap();
 }
 
