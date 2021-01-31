@@ -10,3 +10,6 @@ edition = "2018"
 vulkano = "0.20.0"
 vulkano-shaders = "0.20.0"
 image = "0.23.12"
+
+[profile.dev]
+opt-level = 3
